@@ -3,6 +3,7 @@ var express = require('express');
 const Jimp = require('jimp');
 var path = require('path');
 var cookieParser = require('cookie-parser');
+var sessions = require('express-session');
 var logger = require('morgan');
 const bodyParser = require('body-parser');
 var indexRouter = require('./routes/index');
@@ -20,7 +21,7 @@ app.set('view engine', 'jade');
 
 app.use(logger('dev'));
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -30,13 +31,16 @@ app.use(function(req, res, next) {
   console.log("SERVER REQUEST")
   console.log(req.method)
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST,OPTIONS, PUT, DELETE');
+  //TODO: previously was * and false (maybe do if and only set if login post?)
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Credentials', false);
+
   console.log("set header")
   //https://stackoverflow.com/questions/40497399/http-request-from-angular-sent-as-options-instead-of-post
   if(req.method=="OPTIONS"){
+    //console.log(res)
     console.log("GOT OPTIONS REQ")
     res.writeHead(200, {"Content-Type": "application/json"});
     res.end();
@@ -44,8 +48,36 @@ app.use(function(req, res, next) {
   }
   next();
 });
+const oneDay = 1000 * 60 * 60 * 24;
 
-app.use('/', indexRouter);
+//session middleware
+app.use(sessions({
+    secret: "thisismysecrctekeyfhrgfgrfrty84fwir767",
+    saveUninitialized:true,
+    cookie: { maxAge: oneDay },
+    resave: false
+}));
+app.post('/user',(req,res) => {
+
+    var session
+    console.log(req.body)
+    console.log(req.session)
+    var myusername="matt"
+    var mypassword = "matt"
+    if(req.body.username == myusername && req.body.password == mypassword){
+
+        res.cookie('isLoggedIn', true);  
+        session=req.session;
+        session.userid=req.body.username;
+        console.log(req.session)
+        res.send(`Login Success`);
+    }
+    else{
+        res.send('Invalid username or password');
+    }
+})
+
+//app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/test', testRouter);
 
@@ -63,9 +95,8 @@ let con = mysql.createConnection({
   database: 'dotafantasy',
 });
 con.connect(function(err) {
-  console.log("TRYING TO CONNECT")
   if (err) throw err;
-  console.log("CONNECTED")
+  console.log("CONNECTED to db")
   console.log("running on port 5000")
 });
 app.get('/max', function(req, res, next) {
@@ -123,7 +154,7 @@ app.use('/login', (req, res) => {
           // returns result
           if(result){
               console.log("PASSOWRD MATCH")
-              res.send({token:"loginToken"});
+              res.send({token:"token"});
           }else{
               console.log("PASSWORD NOT MATCH")
               res.send({});
@@ -179,7 +210,7 @@ app.get('/getLeagueTeam', function (req, res) {
   // res.send({"dsa":'Hello world from Express.'});
   console.log("GET REQUEST")
   console.log(req.query.leagueId+" AND "+req.query.teamname)
-  con.query("Select convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername",[req.query.leagueId,req.query.teamname], function (err, result) {
+  con.query("Select imageurl, convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername",[req.query.leagueId,req.query.teamname], function (err, result) {
   if (err) throw err;
 
   res.send(result)
@@ -192,36 +223,55 @@ app.get('/getLeagueTeams', function (req, res) {
   console.log(req.query.leagueId)
   //console.log(req.query)
   //https://www.geeksforgeeks.org/how-to-convert-from-blob-to-text-in-mysql/
-  con.query("Select teamrating,teamid,teamname, convert(logo using utf8) from leagueteams WHERE leagueid = ? ORDER BY teamrating DESC",[req.query.leagueId], function (err, result) {
+  con.query("Select teamrating,teamid,teamname, convert(logo using utf8),logourl from leagueteams WHERE leagueid = ? ORDER BY teamrating DESC",[req.query.leagueId], function (err, result) {
   if (err) throw err;
   //console.log("Result: " + result);
   const returnArray = [];
 
-  con.query("Select convert(playerimage using utf8),dotaplayer.playername, currentprice, teamname from playerteamleague,dotaplayer WHERE leagueid = ? AND dotaplayer.playername = playerteamleague.playername ORDER BY position ASC",[req.query.leagueId], function (err, playerResult) {
+  con.query("Select playerid,convert(playerimage using utf8),dotaplayer.playername, currentprice, teamname,imageurl,kills,deaths,gpm,xpm,assists from playerteamleague,dotaplayer WHERE leagueid = ? AND dotaplayer.playername = playerteamleague.playername ORDER BY position ASC",[req.query.leagueId], function (err, playerResult) {
      
       if (err) throw err;
       //console.log("Result: " + playerResult);
 
       var leagueName,leagueId
+      var playersNoId,playersNoImage,playersNoPrice
       for(var i=0;i<result.length;i++)
       {
           var playerArray=[];
+          playersNoId=0
+          playersNoImage=0
+          playersNoPrice=0
           var teamname = result[i]['teamname'];
           //console.log("TEAM "+result[i]['teamname'])
           for(var j=0;j<playerResult.length;j++)
           {
               if( playerResult[j]['teamname']==result[i]['teamname'])
               {
+
+                if(playerResult[j]['playerid']==null){
+                    playersNoId++
+                }
+                if(playerResult[j]['imageurl']==null){
+                    playersNoImage++
+                }
+                if(playerResult[j]['currentprice']==-1){
+                    playersNoPrice++
+                }
                   //console.log(playerResult[j]['playername'])
                   playerArray.push({"playername":playerResult[j]['playername'],
                                     "currentPrice":playerResult[j]['currentprice'],
-                                    "playerImage":playerResult[j]['convert(playerimage using utf8)']})
+                                    "playerImage":playerResult[j]['imageurl'],
+                                    "kd":(Math.round( playerResult[j]['kills']/playerResult[j]['deaths'] * 100)/ 100),
+                                    "gpm":playerResult[j]['gpm'],
+                                    "xpm":playerResult[j]['xpm'],
+                                    "assists":playerResult[j]['assists']
+                                    /*"playerImage":playerResult[j]['convert(playerimage using utf8)']*/})
               
               }
           }
           // console.log(playerArray)
          // console.log(result[i]['convert(logo using utf8)'])
-          returnArray.push({"teamname":result[i]['teamname'],"logo":result[i]['convert(logo using utf8)'],"players":playerArray,"teamid":result[i]['teamid'],"teamrating":result[i]['teamrating']})
+          returnArray.push({"teamname":result[i]['teamname'],"logo":result[i]['logourl']/*result[i]['convert(logo using utf8)']*/,"players":playerArray,"teamid":result[i]['teamid'],"teamrating":result[i]['teamrating'],"playersNoId":playersNoId,"playersNoImage":playersNoImage,"playersNoPrice":playersNoPrice})
       }
   console.log("RETURN SUCCESS")
 //    console.log(returnArray)
@@ -230,23 +280,39 @@ app.get('/getLeagueTeams', function (req, res) {
   });
   });
 });
-app.post('/addTournament', function (req, res) {
+app.post('/addTournament', async function (req, res) {
   //res.__setitem__("Access-Control-Allow-Origin", "*")
   console.log("POST REQUEST")
   console.log(req.body)
-  con.query("INSERT INTO dotaleague (leagueid, ggscoreurl) VALUES (?, ?)", [req.body.leagueId,req.body.ggscoreurl], async (err,rows) => {
-  if (err) {
-      console.log("error"+err.sqlMessage)
-      res.status(400).send(err.sqlMessage)
-  }else{
-     console.log("adding league teams")
-     var response = await GGSCOREaddLeagueTeams(req.body.ggscoreurl,req.body.leagueId)
-     res.send("adding success")
-  }
+  const response = await fetch(`https://api.opendota.com/api/leagues/?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
+    method: 'GET',
+    headers: {
+        'Accept': 'application/json',
+    }, 
+  })
+    const leagues = await response.json()
+    //console.log(leagues)
+    var obj = leagues.find(o => o.leagueid == req.body.leagueId);
+    console.log(obj)
 
-  });   
+    if(obj==null){
+        res.send({msg:"Fail: Cant find league"})
+        return
+    }
+    con.query("INSERT INTO dotaleague (leagueid, ggscoreurl,leaguenameopendota) VALUES (?, ?, ?)", [req.body.leagueId,req.body.ggscoreurl,obj.name], async (err,rows) => {
+    if (err) {
+        console.log("error"+err.sqlMessage)
+
+    }else{
+        console.log("adding league teams")
+        var response = await GGSCOREaddLeagueTeams(req.body.ggscoreurl,req.body.leagueId)
+
+    }
+
+    });   
     
   //res.status(200)
+  res.send({msg:"Success adding tournament"})
 });
 async function GGSCOREaddLeagueTeams(ggscoreurl,leagueid){
   var leagueHtml = await getHtml(ggscoreurl)
@@ -258,18 +324,65 @@ async function GGSCOREaddLeagueTeams(ggscoreurl,leagueid){
   //0 upper div 1 lower div
   doc = parser.parseFromString(collection[0].innerHTML, 'text/html')
   collection = doc.getElementsByClassName("tb")
-  console.log(collection)
+
+  var teamNames=[]
+  var players=[]
   for(var x=0;x<collection.length;x++){
     //console.log(collection[x].innerHTML)
     var urlStart = collection[x].innerHTML.indexOf('<a href="')+9
     var urlEnd = collection[x].innerHTML.indexOf('"',urlStart)
     //console.log(urlStart+" and "+ urlEnd)
     var teamUrl = "https://ggscore.com/"+collection[x].innerHTML.substring(urlStart,urlEnd)
-    await GGSCOREaddTeam(teamUrl)
+    var teamJson = await GGSCOREaddTeam(teamUrl,leagueid)
+    teamNames.push(teamJson.teamname)
+    //players.push(teamJson.players)
+    players=players.concat(teamJson.players)
+    //console.log(teamJson.players)
   }
-  //console.log(leagueHtml)
+  console.log("ALL TEAMS ADDED")
+  console.log(teamNames)
+  console.log(players)
+  var response = await fetch(`https://api.opendota.com/api/teams/?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+        }, 
+      })
+  var res = await response.json()
+  for(var x=0;x<teamNames.length;x++){
+    var obj = res.find(o => o.name === teamNames[x]);
+    //console.log(obj.name)
+    if(obj!=null){
+        con.query("UPDATE leagueteams SET teamid=?, teamrating=? WHERE teamname=? AND leagueid=?", [obj.team_id,obj.rating,teamNames[x],leagueid],  (err,rows) => {
+        if (err) {
+            console.log("error"+err.sqlMessage)
+        }
+
+        });
+       
+    }
+  }
+  var response = await fetch(`https://api.opendota.com/api/proplayers/?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+        }, 
+      })
+  var res = await response.json()
+  for(var x=0;x<players.length;x++){
+    var obj = res.find(o => o.name.toLowerCase() === players[x].toLowerCase());
+    if(obj==null){
+        console.log("couldnt find "+players[x] )
+    }else{
+        //console.log("FOUND "+players[x]+" "+obj.account_id )
+        updatePlayer(players[x], obj.account_id, obj.team_name,leagueid)
+    }
+    addPlayerPrice(players[x],leagueid)
+  }
+    //console.log(res)
 }
-async function GGSCOREaddTeam(ggscoreteamurl){
+
+async function GGSCOREaddTeam(ggscoreteamurl,leagueid){
 
   var teamHtml = await getHtml(ggscoreteamurl)
   var parser = new DomParser();
@@ -281,18 +394,68 @@ async function GGSCOREaddTeam(ggscoreteamurl){
   collection = doc.getElementsByClassName("playerava")
   var urlStart = collection[0].innerHTML.indexOf('img src="')+9
   var urlEnd = collection[0].innerHTML.indexOf('"',urlStart)
-  var teamLogo = "https://ggscore.com/"+collection[0].innerHTML.substring(urlStart,urlEnd)
-  console.log(teamLogo)
-
+  var teamLogo = "https://ggscore.com"+collection[0].innerHTML.substring(urlStart,urlEnd)
+  //console.log(teamLogo)
+  con.query("INSERT INTO leagueteams (leagueid, teamname,logourl) VALUES (?, ?, ?)", [leagueid,teamname,teamLogo],  (err,rows) => {
+    if (err) {
+        console.log("error"+err.sqlMessage)
+    }
+    else
+    {
+    }
+  });
 
   collection = doc.getElementsByClassName("pinTeam")
+  var players=[]
   for(var x=0;x<collection.length;x++){
-
-    console.log(collection[x].getElementsByClassName("pllink")[0].innerHTML)
+    var playername=collection[x].getElementsByClassName("pllink")[0].innerHTML
+    //console.log(playername)
     var urlStart = collection[x].innerHTML.indexOf('background-image:url(')+22  
     var urlEnd = collection[x].innerHTML.indexOf(')',urlStart)
-    console.log(collection[x].innerHTML.substring(urlStart,urlEnd))
+    var playerImage = "https://ggscore.com/"+collection[x].innerHTML.substring(urlStart,urlEnd)
+    //console.log(playerImage)
+    players.push(playername)
+    var position
+    x>=3 ? position=4.5 : position=x+1
+    con.query("INSERT INTO playerteamleague (leagueid, teamname, playername,position) VALUES (?, ?, ?, ?)", [leagueid,teamname,playername,position],  (err,rows) => {
+        if (err) {
+            console.log("error"+err.sqlMessage)
+        }
+    });
+
+    con.query("INSERT INTO dotaplayer (playername,imageurl) VALUES (?, ?)", [playername,playerImage],  (err,rows) => {
+        if (err) {
+            console.log("error"+err.sqlMessage)
+        }
+    });
   }
+  return {teamname:teamname,
+         players:players}
+}
+function addTeamPrices(teamname,leagueid){
+    console.log("UPDATING TEAMS PRICES" )
+    con.query("SELECT playername from playerteamleague WHERE leagueid=? AND teamname=? AND currentprice=-1",[leagueid,teamname], function (err, result) {
+        if (err) throw err;
+       for(var x=0;x<result.length;x++){
+            addPlayerPrice(result[x]['playername'],leagueid)
+       }
+    });
+}
+function addPlayerPrice(playername, leagueid){
+    //console.log("price "+playername+"  "+leagueid)
+    con.query("SELECT position,teamrating from leagueteams,playerteamleague WHERE playername=? AND playerteamleague.leagueid=? AND playerteamleague.teamname=leagueteams.teamname ",[playername,leagueid], function (err, result) {
+        if (err) throw err;
+        //console.log(result[0]['position'] +" AND "+ result[0]['teamrating'])
+        if(result[0]['teamrating']!=null){
+            var price = (6-result[0]['position'])*(result[0]['teamrating']/2);
+            //console.log(playername+" PRICE "+price)
+            con.query("UPDATE playerteamleague SET currentprice = ? WHERE playername=? AND leagueid=?", [price, playername,leagueid], (err,rows) => {
+                if (err) console.log(err)//throw reject(err)
+                
+            });
+        }
+    });
+
 }
 async function getHtml(url) {
   const response = await fetch(url);
@@ -688,7 +851,31 @@ var scoringJson={"kill":5,
 app.post('/updateLeague', function (req, res) {
     console.log("POST REQUEST"+req.body.leagueid+" xdd")
     calculateLeagueMatches(req.body.leagueid,scoringJson)
-    //updatePlayer(req.body.playername,req.body.playerid,null)
+    
+});
+app.post('/nukeLeague', function (req, res) {
+    console.log("POST REQUEST"+req.body.leagueid+" nuke")
+    
+    con.query("DELETE FROM dotaleague WHERE leagueid=?",[req.body.leagueid], function (err, result) {
+    if (err) console.log(err)
+ 
+    });
+    con.query("DELETE FROM playerteamleague WHERE leagueid=?",[req.body.leagueid], function (err, result) {
+        if (err) console.log(err)
+
+    });
+    con.query("DELETE FROM leagueteams WHERE leagueid=?",[req.body.leagueid], function (err, result) {
+        if (err) console.log(err)
+
+    });
+    con.query("DELETE FROM leaguematches WHERE leagueid=?",[req.body.leagueid], function (err, result) {
+        if (err) console.log(err)
+
+    });
+    con.query("DELETE FROM userleagueteam WHERE leagueid=?",[req.body.leagueid], function (err, result) {
+        if (err) console.log(err)
+
+    });
 });
 async function calculateLeagueMatches(leagueid,scoring)
 {
@@ -901,7 +1088,7 @@ async function addingPlayerIds(leagueid){
       }
       }); 
 }
-async function updatePlayer(playername, accountId, foundteamname)
+async function updatePlayer(playername, accountId, foundteamname,leagueid)
   {
     const matchesResponse = await fetch(`https://api.opendota.com/api/players/`+accountId+ `/recentMatches?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
         method: 'GET',
@@ -910,13 +1097,13 @@ async function updatePlayer(playername, accountId, foundteamname)
         }, 
       })
     const recentMatches = await matchesResponse.json()
-    console.log(recentMatches.error)
+    //console.log(recentMatches.error)
     if(recentMatches.error)
     {
         console.log("ERROR ID")
         return
     }
-    console.log("NO ID ERROR")
+
     var kills=0
     var deaths=0
     var assists=0
@@ -938,26 +1125,27 @@ async function updatePlayer(playername, accountId, foundteamname)
             prorecentgames++
         }
     }
-    kills = parseInt(kills/recentMatches.length, 10)
-    deaths = parseInt(deaths/recentMatches.length, 10)
-    assists = parseInt(assists/recentMatches.length, 10)
+    kills = kills/recentMatches.length
+    deaths = deaths/recentMatches.length
+    assists = assists/recentMatches.length
     gpm = parseInt(gpm/recentMatches.length, 10)
     xpm = parseInt(xpm/recentMatches.length, 10)
     lastHits = parseInt(lastHits/recentMatches.length, 10)
-    //console.log("kills:" +kills + "deaths:" +deaths +"assists:" +assists+"gpm:" +gpm+"xpm:" +xpm+"lasthits:" +lastHits)
-    con.query("UPDATE dotaplayer SET playerid=?,foundteamname=?,kills=?,deaths=?,assists=?,gpm=?,xpm=?,lasthits=?,prorecentgames=? WHERE playername=?",  [accountId, foundteamname,kills, deaths,assists,gpm,xpm, lastHits, prorecentgames, playername], (err,rows) => {
+    console.log(playername+ " kills:" +kills + "deaths:" +deaths +"assists:" +assists+"gpm:" +gpm+"xpm:" +xpm+"lasthits:" +lastHits)
+
+    con.query("UPDATE dotaplayer,playerteamleague SET playerid=?,foundteamname=?,kills=?,deaths=?,assists=?,gpm=?,xpm=?,lasthits=?,prorecentgames=? WHERE dotaplayer.playername=? AND dotaplayer.playername=playerteamleague.playername AND leagueid=?",  [accountId, foundteamname,kills, deaths,assists,gpm,xpm, lastHits, prorecentgames, playername,leagueid], (err,rows) => {
         if (err) console.log(err)//throw reject(err)
-        console.log("UPDATED player id")
+        //console.log("UPDATED player id")
     });
     
   }
 app.post('/updatePlayer', function (req, res) {
     console.log("POST REQUEST"+req.body.playerid)
-    updatePlayer(req.body.playername,req.body.playerid,null)
+    updatePlayer(req.body.playername,req.body.playerid,null,req.body.leagueid)
     console.log(req.body.currentprice+" AND "+req.body.imageurl)
     if( req.body.imageurl!=null){
       console.log("UPDATE URL")
-      con.query("UPDATE dotaplayer SET playerimage=? WHERE playername=?",  [req.body.imageurl,req.body.playername], (err,rows) => {
+      con.query("UPDATE dotaplayer SET imageurl=? WHERE playername=?",  [req.body.imageurl,req.body.playername], (err,rows) => {
           if (err) console.log(err)//throw reject(err)
           console.log("UPDATED player id")
       });
@@ -971,13 +1159,14 @@ app.post('/updatePlayer', function (req, res) {
 app.post('/updateTeam', function (req, res) {
   console.log("POST REQUEST")
 
-  con.query("UPDATE leagueteams SET teamid=?, teamrating=? WHERE teamname=?", [req.body.teamid,req.body.teamrating,req.body.teamname],  (err,rows) => {
+  con.query("UPDATE leagueteams SET teamid=?, teamrating=? WHERE teamname=? AND leagueid=?", [req.body.teamid,req.body.teamrating,req.body.teamname,req.body.leagueid],  (err,rows) => {
   if (err) {
       console.log("error"+err.sqlMessage)
   }
   else
   {
-    addPlayerTeamPrices(req.body.teamname,req.body.teamrating)
+    addTeamPrices(req.body.teamname,req.body.leagueid)
+    //addPlayerTeamPrices(req.body.teamname,req.body.teamrating)
     res.send('Team Succesfully Updated')
   }
   });   
