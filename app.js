@@ -18,7 +18,7 @@ const fetch = require('node-fetch');
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
-
+app.disable('etag');
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -28,8 +28,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.raw());
 app.use(function(req, res, next) {
-  console.log("SERVER REQUEST")
-  console.log(req.method)
+  console.log(req.method+ " SERVER REQUEST with session "+ req.sessionID)
+
 
   //TODO: previously was * and false (maybe do if and only set if login post?)
   res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
@@ -37,7 +37,8 @@ app.use(function(req, res, next) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  console.log("set header")
+  
+
   //https://stackoverflow.com/questions/40497399/http-request-from-angular-sent-as-options-instead-of-post
   if(req.method=="OPTIONS"){
     //console.log(res)
@@ -50,8 +51,9 @@ app.use(function(req, res, next) {
 });
 const oneDay = 1000 * 60 * 60 * 24;
 
-//session middleware
-app.use(sessions({
+//session mid   dleware
+app.use(
+    sessions({
     secret: "thisismysecrctekeyfhrgfgrfrty84fwir767",
     saveUninitialized:true,
     cookie: { maxAge: oneDay },
@@ -70,13 +72,45 @@ app.post('/user',(req,res) => {
         session=req.session;
         session.userid=req.body.username;
         console.log(req.session)
+        //console.log("session "+req.sessionID)
         res.send(`Login Success`);
     }
     else{
         res.send('Invalid username or password');
     }
 })
+app.post('/isLoggedIn',(req,res)=>{
 
+    if(!req.session.userid){
+        //console.log("NOT logged in "+req.session.userid)
+        res.clearCookie('isLoggedIn')
+        res.clearCookie('connect.sid', {path: '/'}).status(200).send(false);    
+    }else{
+        //console.log("YES logged in "+req.session.userid)
+        res.send(true)
+    }
+ })
+app.post('/logout',(req,res)=>{
+    console.log("destroy")
+    console.log(req.sessionID)
+    //req.session.destroy()
+    res.clearCookie('isLoggedIn')
+    res.clearCookie('connect.sid', {path: '/'}).status(200).send('Ok.');
+})
+app.post('/isAdmin',(req,res)=>{
+
+
+    console.log("name "+req.session.userid)
+
+    
+    if(req.session.userid=="matt"){
+        console.log("admin true")
+        res.send(true)
+    }else{
+        console.log("admin false")
+        res.send(false)
+    }
+})
 //app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/test', testRouter);
@@ -110,8 +144,7 @@ app.get('/max', function(req, res, next) {
 });
 
 app.post('/register', (req, res) => {
-  console.log("REGISTERING")
-  console.log(req.body)
+
 
   con.query("Select * from user WHERE username=? ",[req.body.username], function (err, result) {
   if (err) throw err;
@@ -124,7 +157,7 @@ app.post('/register', (req, res) => {
       const saltRounds = 5;
       bcrypt.hash(password, saltRounds, async function(err, hash) {
           // Store hash in database here
-          console.log(hash)
+
           await con.query("INSERT INTO user (username,hash) VALUES (?, ?)", [req.body.username,hash],  (err,rows) => {
               if (err) {
                  console.log(err)
@@ -139,68 +172,155 @@ app.post('/register', (req, res) => {
   });
 
 });
+
 app.use('/login', (req, res) => {
-  console.log(req.body)
+  //console.log(req.body)
   con.query("Select * from user WHERE username=?",[req.body.username], function (err, result) {
   if (err) throw err;
   // console.log("Result: " + result);
-  console.log(result.length)
-  console.log(result)
+
   if(result.length>0)
   {
       var hash = result[0].hash
-      console.log(req.body.password+" AND "+hash)
+      //console.log(req.body.password+" AND "+hash)
       bcrypt.compare(req.body.password, hash, function(err, result) {
           // returns result
           if(result){
               console.log("PASSOWRD MATCH")
-              res.send({token:"token"});
+              res.cookie('isLoggedIn', true);  
+              session=req.session;
+              session.userid=req.body.username;
+              console.log(req.sessionID+" ID")
+              res.send(`Login Success`);
           }else{
               console.log("PASSWORD NOT MATCH")
-              res.send({});
+              res.send(`Invalid username or password`);
           }
         });
 
   }
   else    
   {
-      res.send({});
+    res.send(`Invalid username or password`);
   }
 
   });
 
 });
 app.get('/getMyLeagues', function (req, res) {
+    console.log(req.session.userid)
+    
+    //if invalid user the clear cookies and refresh page
+    if(req.session.userid==null){
+         //res.clearCookie('isLoggedIn')
+         //res.clearCookie('connect.sid', {path: '/'}).status(401).send('Ok.');
+        return
+    }
   // res.send({"dsa":'Hello world from Express.'});
-  console.log("GET REQUEST")
 
-  con.query("Select * from userleagueteam, dotaleague WHERE userleagueteam.user = ? AND dotaleague.leagueid = userleagueteam.leagueid",[req.query.user], function (err, result) {
+  var returnArray=[]
+  con.query("Select * from userleagueteam, dotaleague WHERE userleagueteam.user = ? AND dotaleague.leagueid = userleagueteam.leagueid",[req.session.userid], async function (err, result) {
   if (err) throw err;
   // console.log("Result: " + result);
+   
+    for(var x=0;x<result.length;x++){
+        var temp =result[x]
+        var total = await new Promise((resolve, reject) =>{
+            con.query("SELECT * FROM userleagueteam WHERE leagueid=?",[result[x].leagueid],function (err, result) { 
+                resolve(result.length);
+            });
+        });   
+        var position = await new Promise((resolve, reject) =>{
+            con.query("SELECT * FROM userleagueteam WHERE leagueid=? AND leaguepoints > ?",[result[x].leagueid,result[x].leaguepoints],function (err, result) { 
+                resolve(result.length);
+            });
+        });  
+        var priceTotal = await new Promise((resolve, reject) =>{
+            con.query("SELECT SUM(currentprice) FROM playerteamleague WHERE leagueid=? AND (playername=? OR playername=? OR playername=? OR playername=? OR playername=? )",[result[x].leagueid,result[x].player1,result[x].player2,result[x].player3,result[x].player4,result[x].player5],function (err, result) { 
 
+                resolve(result[0]['SUM(currentprice)']);
+            });
+        });  
+        temp["priceTotal"]=priceTotal
+        temp["total"]=total
+        temp["position"]=position+1
+        returnArray.push(temp)
+    }
 
       //console.log(result)
       res.send(result)
   // res.status(200).send("tournamentArray")
   });
 });
-app.get('/getTournaments', function (req, res) {
-  // res.send({"dsa":'Hello world from Express.'});
-  console.log("GET REQUEST")
+app.get('/getTournamentsGrouped', function (req, res) {
 
-  con.query("Select * from dotaleague", function (err, result) {
+
+   
+    if(req.session.userid=="matt"){
+        var query = "Select * from dotaleague"
+    }else{
+        var query = "Select * from dotaleague WHERE showleague=1"
+    }
+
+    con.query(query, function (err, result) {
+    if (err) throw err;
+    // console.log("Result: " + result);
+    const tournamentArray = [];
+    var returnJson={
+        upcoming:[],
+        live:[],
+        ended:[]
+    }
+    var date = new Date();
+
+    var leagueName,leagueId
+    for(var i=0;i<result.length;i++)
+    {
+
+        console.log(result[i]['leaguenameopendota']+" " +result[i]['leagueStartDate'])
+        leagueName = result[i]['leaguenameopendota']
+        leagueId = result[i]['leagueid']
+        if(result[i]['leagueStartDate']==null || result[i]['leagueEndDate']==null){
+            returnJson.live.push({leagueName,leagueId})
+        }else if(result[i]['leagueStartDate']>date){
+            returnJson.upcoming.push({leagueName,leagueId})
+        }else if(result[i]['leagueEndDate']<date){
+            returnJson.ended.push({leagueName,leagueId})
+        }else{
+            returnJson.live.push({leagueName,leagueId})
+        }
+        tournamentArray.push({leagueName,leagueId})
+    }
+
+   
+    res.send(returnJson)
+    // res.status(200).send("tournamentArray")
+    });
+  });
+app.get('/getTournaments', function (req, res) {
+  //res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  //res.setHeader('Access-Control-Allow-Credentials', true);
+  // res.send({"dsa":'Hello world from Express.'});
+
+  if(req.session.userid=="matt"){
+    var query = "Select * from dotaleague"
+  }else{
+    var query = "Select * from dotaleague WHERE showleague=1"
+  }
+
+  con.query(query, function (err, result) {
   if (err) throw err;
   // console.log("Result: " + result);
   const tournamentArray = [];
   var leagueName,leagueId
   for(var i=0;i<result.length;i++)
   {
-      console.log(result[i]['leaguenameopendota'])
+
       leagueName = result[i]['leaguenameopendota']
       leagueId = result[i]['leagueid']
       tournamentArray.push({leagueName,leagueId})
   }
-  console.log("RETURN SUCCESS")
+
  
   res.send(tournamentArray)
   // res.status(200).send("tournamentArray")
@@ -208,17 +328,57 @@ app.get('/getTournaments', function (req, res) {
 });
 app.get('/getLeagueTeam', function (req, res) {
   // res.send({"dsa":'Hello world from Express.'});
-  console.log("GET REQUEST")
-  console.log(req.query.leagueId+" AND "+req.query.teamname)
-  con.query("Select imageurl, convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername",[req.query.leagueId,req.query.teamname], function (err, result) {
+
+  con.query("Select imageurl, convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername ORDER BY currentprice DESC",[req.query.leagueId,req.query.teamname], function (err, result) {
   if (err) throw err;
 
   res.send(result)
   // res.status(200).send("tournamentArray")
   });
 });
+app.get('/getPlayersNotFound', function (req, res) {
+    // res.send({"dsa":'Hello world from Express.'});
+    if(req.session.userid!="matt"){
+        return
+    }
+
+    con.query("Select * from playersnotfound WHERE leagueid = ? ORDER BY foundteam ASC",[req.query.leagueId], function (err, result) {
+    if (err) console.log(err);
+
+    res.send(result)
+    // res.status(200).send("tournamentArray")
+    });
+  });
+app.get('/getLeagueShowLocks', function (req, res) {
+    console.log(req.session.userid+" GET LEAGUE SHOW USER")
+    if(req.session.userid!="matt"){
+        return
+    }
+    // res.send({"dsa":'Hello world from Express.'});
+
+    con.query("Select * from dotaleague WHERE leagueid = ?",[req.query.leagueId], function (err, result) {
+    if (err) console.log(err);
+
+    res.send(result[0])
+    // res.status(200).send("tournamentArray")
+    });
+  });
+  app.post('/updateLeagueLocks', function (req, res) {
+    // res.send({"dsa":'Hello world from Express.'});
+    if(req.session.userid!="matt"){
+        return
+    }
+    console.log(req.body.leagueid+ " UPDATE LEAGUE LOCKS T"+req.body.showLeague+"  WITH "+req.body.lockRosters)
+    con.query("UPDATE dotaleague SET showleague=?, lockrosters=? WHERE leagueid=?",[req.body.showLeague,req.body.lockRosters,req.body.leagueid], function (err, result) {
+    if (err) console.log(err);
+
+    res.send(result[0])
+    // res.status(200).send("tournamentArray")
+    });
+  });
 app.get('/getLeagueTeams', function (req, res) {
   // res.send({"dsa":'Hello world from Express.'});
+
   console.log("GET REQUEST")
   console.log(req.query.leagueId)
   //console.log(req.query)
@@ -228,7 +388,7 @@ app.get('/getLeagueTeams', function (req, res) {
   //console.log("Result: " + result);
   const returnArray = [];
 
-  con.query("Select playerid,convert(playerimage using utf8),dotaplayer.playername, currentprice, teamname,imageurl,kills,deaths,gpm,xpm,assists from playerteamleague,dotaplayer WHERE leagueid = ? AND dotaplayer.playername = playerteamleague.playername ORDER BY position ASC",[req.query.leagueId], function (err, playerResult) {
+  con.query("Select playerid,convert(playerimage using utf8),dotaplayer.playername, currentprice, teamname,imageurl,kills,deaths,gpm,xpm,assists from playerteamleague,dotaplayer WHERE leagueid = ? AND dotaplayer.playername = playerteamleague.playername ORDER BY currentprice DESC",[req.query.leagueId], function (err, playerResult) {
      
       if (err) throw err;
       //console.log("Result: " + playerResult);
@@ -247,7 +407,6 @@ app.get('/getLeagueTeams', function (req, res) {
           {
               if( playerResult[j]['teamname']==result[i]['teamname'])
               {
-
                 if(playerResult[j]['playerid']==null){
                     playersNoId++
                 }
@@ -264,7 +423,7 @@ app.get('/getLeagueTeams', function (req, res) {
                                     "kd":(Math.round( playerResult[j]['kills']/playerResult[j]['deaths'] * 100)/ 100),
                                     "gpm":playerResult[j]['gpm'],
                                     "xpm":playerResult[j]['xpm'],
-                                    "assists":playerResult[j]['assists']
+                                    "assists":Math.round(playerResult[j]['assists']*100)/100
                                     /*"playerImage":playerResult[j]['convert(playerimage using utf8)']*/})
               
               }
@@ -273,7 +432,7 @@ app.get('/getLeagueTeams', function (req, res) {
          // console.log(result[i]['convert(logo using utf8)'])
           returnArray.push({"teamname":result[i]['teamname'],"logo":result[i]['logourl']/*result[i]['convert(logo using utf8)']*/,"players":playerArray,"teamid":result[i]['teamid'],"teamrating":result[i]['teamrating'],"playersNoId":playersNoId,"playersNoImage":playersNoImage,"playersNoPrice":playersNoPrice})
       }
-  console.log("RETURN SUCCESS")
+
 //    console.log(returnArray)
   res.send(returnArray)
   // res.status(200).send("tournamentArray")
@@ -282,8 +441,8 @@ app.get('/getLeagueTeams', function (req, res) {
 });
 app.post('/addTournament', async function (req, res) {
   //res.__setitem__("Access-Control-Allow-Origin", "*")
-  console.log("POST REQUEST")
-  console.log(req.body)
+
+
   const response = await fetch(`https://api.opendota.com/api/leagues/?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
     method: 'GET',
     headers: {
@@ -370,7 +529,12 @@ async function GGSCOREaddLeagueTeams(ggscoreurl,leagueid){
       })
   var res = await response.json()
   for(var x=0;x<players.length;x++){
-    var obj = res.find(o => o.name.toLowerCase() === players[x].toLowerCase());
+    var obj
+    //try find exact equal if not then find any case
+    obj = res.find(o => o.name === players[x]);
+    if(obj==null){
+        obj = res.find(o => o.name.toLowerCase() === players[x].toLowerCase());
+    }
     if(obj==null){
         console.log("couldnt find "+players[x] )
     }else{
@@ -443,11 +607,16 @@ function addTeamPrices(teamname,leagueid){
 }
 function addPlayerPrice(playername, leagueid){
     //console.log("price "+playername+"  "+leagueid)
-    con.query("SELECT position,teamrating from leagueteams,playerteamleague WHERE playername=? AND playerteamleague.leagueid=? AND playerteamleague.teamname=leagueteams.teamname ",[playername,leagueid], function (err, result) {
+    con.query("SELECT position,teamrating,gpm from leagueteams,playerteamleague,dotaplayer WHERE playerteamleague.playername=? AND playerteamleague.leagueid=? AND playerteamleague.teamname=leagueteams.teamname AND dotaplayer.playername=playerteamleague.playername ",[playername,leagueid], function (err, result) {
         if (err) throw err;
         //console.log(result[0]['position'] +" AND "+ result[0]['teamrating'])
         if(result[0]['teamrating']!=null){
             var price = (6-result[0]['position'])*(result[0]['teamrating']/2);
+            console.log(playername +" has gpm "+result[0]['gpm']+ " AND POSTITION "+result[0]['position'])
+            if(result[0]['gpm']!=null && result[0]['position']==4.5){
+                price+=(result[0]['gpm']-200) 
+                console.log("NEW PRICE"+price)
+            }
             //console.log(playername+" PRICE "+price)
             con.query("UPDATE playerteamleague SET currentprice = ? WHERE playername=? AND leagueid=?", [price, playername,leagueid], (err,rows) => {
                 if (err) console.log(err)//throw reject(err)
@@ -748,13 +917,17 @@ async function addPlayer(playername, leagueid,teamname,position,playerUrl) {
     
 // }
 app.post('/addTeamSelection', function (req, res) {
-  console.log("POST REQUEST")
 
-  con.query("INSERT INTO userleagueteam (user, leagueid ,player1,player2,player3,player4,player5) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.user,req.body.leagueid,req.body.players[0],req.body.players[1],req.body.players[2],req.body.players[3],req.body.players[4]],  (err,rows) => {
+ if(req.session.userid==null){
+    res.send('Error, logout and try again')
+    return
+ }
+
+  con.query("INSERT INTO userleagueteam (user, leagueid ,player1,player2,player3,player4,player5) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.session.userid,req.body.leagueid,req.body.players[0],req.body.players[1],req.body.players[2],req.body.players[3],req.body.players[4]],  (err,rows) => {
   if (err) {
       console.log("error"+err.sqlMessage)
       
-      con.query("UPDATE userleagueteam SET player1 =?,player2=?,player3=?,player4=?,player5=? WHERE user =? AND leagueid =?", [req.body.players[0],req.body.players[1],req.body.players[2],req.body.players[3],req.body.players[4],req.body.user,req.body.leagueid],  (err,rows) => {
+      con.query("UPDATE userleagueteam SET player1 =?,player2=?,player3=?,player4=?,player5=? WHERE user =? AND leagueid =?", [req.body.players[0],req.body.players[1],req.body.players[2],req.body.players[3],req.body.players[4],req.session.userid,req.body.leagueid],  (err,rows) => {
           if (err) {
               res.status(400)
           }
@@ -775,9 +948,9 @@ app.post('/addTeamSelection', function (req, res) {
 });
 app.get('/getUserLeagueTeam', function (req, res) {
   // res.send({"dsa":'Hello world from Express.'});
-  console.log("GET REQUEST")
-  console.log(req.query.user+" AND "+ req.query.leagueid)
-  con.query("Select * from userleagueteam WHERE user = ? and leagueid =? ",[req.query.user,req.query.leagueid], function (err, result) {
+
+  console.log(req.session.userid+" AND "+ req.query.leagueid)
+  con.query("Select * from userleagueteam WHERE user = ? and leagueid =? ",[req.session.userid,req.query.leagueid], function (err, result) {
   if (err) throw err;
   //console.log("Result: " + JSON.stringify(result));
 
@@ -791,7 +964,7 @@ app.get('/getUserLeagueTeam', function (req, res) {
   var selectedPlayers = []
   var totalPrice =0;
 
-  con.query("Select convert(playerimage using utf8), dotaplayer.playername, currentprice from playerteamleague,dotaplayer WHERE dotaplayer.playername=playerteamleague.playername AND leagueid =? AND (playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ?)",
+  con.query("Select imageurl,convert(playerimage using utf8), dotaplayer.playername, currentprice from playerteamleague,dotaplayer WHERE dotaplayer.playername=playerteamleague.playername AND leagueid =? AND (playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ? OR playerteamleague.playername = ?)",
               [req.query.leagueid, result[0].player1,result[0].player2,result[0].player3,result[0].player4,result[0].player5], function (err, playerResult) {
       if (err) throw err;
       // console.log(playerResult)
@@ -800,8 +973,8 @@ app.get('/getUserLeagueTeam', function (req, res) {
           // console.log(playerResult[x].playername)
           totalPrice+=playerResult[x]['currentprice']
           selectedPlayers.push({"playername":playerResult[x]['playername'],
-                                   "playerimage":playerResult[x]['convert(playerimage using utf8)'],
-                                   "playerprice":playerResult[x]['currentprice']})
+                                "playerimage":playerResult[x]['imageurl'],
+                                "playerprice":playerResult[x]['currentprice']})
       }
       // console.log(selectedPlayers)
       // console.log(totalPrice)
@@ -812,6 +985,16 @@ app.get('/getUserLeagueTeam', function (req, res) {
 
   });
 });
+app.get('/getIsLeagueRostersLocked', function (req, res) {
+    // res.send({"dsa":'Hello world from Express.'});
+    con.query("Select * from  dotaleague WHERE leagueid = ?",[req.query.leagueid], function (err, result) {
+    if (err) throw err;
+    
+    
+    res.send(result[0])
+
+    });
+  });
 app.get('/getLeagueRosterLocks', function (req, res) {
   // res.send({"dsa":'Hello world from Express.'});
   console.log("GET getLeagueRosterLocks"+req.query.leagueid)
@@ -890,14 +1073,19 @@ async function calculateLeagueMatches(leagueid,scoring)
     var matchesNoTeams=0
     console.log(res.length+"LENGTH")
     //for(var x=0;x<3;x++){
+    // con.query("UPDATE dotaleague SET numGames=? WHERE leagueid=?",[res.length,leagueid],function (err, result) {
+    //     if (err) throw err;
+    // });
+    var playersNotFound=[]
     for(var x=0;x<res.length;x++){
-        console.log("match "+x +" between "+res[x].radiant_team_id+" and "+  res[x].dire_team_id)
 
         var matchCalculated = await isMatchCalculated(leagueid,res[x].match_id)
         if(matchCalculated==1)
         {
+            console.log("calculated match "+x +" between "+res[x].radiant_team_id+" and "+  res[x].dire_team_id+" matchid: "+res[x].match_id)
             continue
         }
+        console.log("new match "+x +" between "+res[x].radiant_team_id+" and "+  res[x].dire_team_id+" matchid: "+res[x].match_id)
         await new Promise((resolve, reject) =>{
             con.query("Select * from leagueteams WHERE leagueid=? AND (teamid=? OR teamid = ?)",[leagueid,res[x].radiant_team_id,res[x].dire_team_id], async function (err, result) {
                 if (err) throw err;
@@ -912,10 +1100,17 @@ async function calculateLeagueMatches(leagueid,scoring)
                       })
                     const matchRes = await matchResponse.json()
                     //console.log("MATCH ID PLAYERS: "+res[x].match_id +" teams: "+result[0].teamname+ " and "+result[1].teamname)
+                    //console.log(matchRes)
                     var matchesPlayers=[]
                     for(var y=0;y<matchRes.players.length;y++ )
                     {
-                        //console.log(matchRes.players[y].account_id)
+                        //console.log(matchRes.radiant_team)
+                        if(y<5){
+                            var teamname=matchRes.radiant_team.name
+                        }else{
+                            var teamname=matchRes.dire_team.name
+                        }
+
                         matchesPlayers.push({"playerid":matchRes.players[y].account_id,
                                              "kills":matchRes.players[y].kills,
                                              "assists":matchRes.players[y].assists,
@@ -923,22 +1118,57 @@ async function calculateLeagueMatches(leagueid,scoring)
                                              "lasthits":matchRes.players[y].last_hits,
                                              "stuns":matchRes.players[y].stuns,
                                              "herohealing":matchRes.players[y].hero_healing,
-                                             "heroplayed":matchRes.players[y].max_hero_hit.unit,
-                                             "playername":matchRes.players[y].name
+                                             "heroplayed":matchRes.players[y].max_hero_hit_unit,
+                                             "playername":matchRes.players[y].name,
+                                             "teamname":teamname
                     })
                     }
 
                     await new Promise((resolve, reject) =>{
 
-                        con.query("Select dotaplayer.playername from dotaplayer,playerteamleague WHERE dotaplayer.playername=playerteamleague.playername AND leagueid=? AND(playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? )",[leagueid,matchesPlayers[0].playerid,matchesPlayers[1].playerid,matchesPlayers[2].playerid,matchesPlayers[3].playerid,matchesPlayers[4].playerid,matchesPlayers[5].playerid,matchesPlayers[6].playerid,matchesPlayers[7].playerid,matchesPlayers[8].playerid,matchesPlayers[9].playerid], async function (err, playersResult) {
+                        con.query("Select dotaplayer.playername, playerid from dotaplayer,playerteamleague,leagueteams WHERE dotaplayer.playername=playerteamleague.playername AND (playerteamleague.teamname=leagueteams.teamname AND (leagueteams.teamid=? OR leagueteams.teamid=?)) AND playerteamleague.leagueid=? AND(playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? OR playerid = ? )",[res[x].dire_team_id,res[x].radiant_team_id,leagueid,matchesPlayers[0].playerid,matchesPlayers[1].playerid,matchesPlayers[2].playerid,matchesPlayers[3].playerid,matchesPlayers[4].playerid,matchesPlayers[5].playerid,matchesPlayers[6].playerid,matchesPlayers[7].playerid,matchesPlayers[8].playerid,matchesPlayers[9].playerid], async function (err, playersResult) {
                             if (err) throw err;
                             var validMatch
                             //only add points of 10 players found, else mark match as not completed
                             if(playersResult.length!=10)
                             {
-                                console.log("NOT 10 PLAYERS")
-                                console.log(matchesPlayers)
-                                console.log(playersResult)
+                                console.log("NOT 10 PLAYERS only found "+playersResult.length)
+                                for(var y=0;y<matchesPlayers.length;y++){
+                                    //console.log("NEW Y "+y)
+                                    //console.log(matchesPlayers[y]['playerid'])
+                                    var obj = playersResult.find(o => o['playerid'] === matchesPlayers[y]['playerid']);
+                                    //console.log(obj)
+                                    if(obj!=null){
+                                        var name = obj['playername']
+                                        var id = obj['playerid']
+                                        console.log("FOUND "+obj['playername'] + " with id "+obj['playerid'] )
+                                        con.query("DELETE FROM playersnotfound WHERE playerid=? AND leagueid=?",[id,leagueid],function (err, result) {
+                                            if (err) throw err;
+                                            //console.log(result)
+                                        });
+
+                                    }else{
+                                        console.log("Couldnt find "+ matchesPlayers[y]['playername']+ "  "+matchesPlayers[y]['playerid']+" team "+matchesPlayers[y]['teamname'])
+
+                                        await new Promise((resolve, reject) =>{
+                                            con.query("SELECT * FROM playersnotfound WHERE playername=? AND playerid=? AND leagueid=?",[matchesPlayers[y]['playername'],matchesPlayers[y]['playerid'],leagueid],function (err, result) {
+                                                if (err) throw err;
+                                                if(result.length>0){
+                                                    
+                                                }else{
+
+                                                    console.log("inserting not found "+matchesPlayers[y]['playername']+"  "+matchesPlayers[y]['playerid']+"  "+leagueid)
+                                                    con.query("INSERT INTO playersnotfound (playername,playerid,leagueid,foundteam) VALUES (?,?,?,?)",[matchesPlayers[y]['playername'],matchesPlayers[y]['playerid'],leagueid,matchesPlayers[y]['teamname']],function (err, result) {
+                                                        if (err) throw err;
+                                                    });
+                                                }
+                                                resolve();
+                                            });
+
+                                        });                                        
+                                    }
+                                }
+
                                 validMatch=0
                             }
                             else
@@ -948,15 +1178,20 @@ async function calculateLeagueMatches(leagueid,scoring)
                                 for(var z=0;z<matchesPlayers.length;z++)
                                 {
                                     updateStats(matchesPlayers[z],scoring,leagueid)
+                                    con.query("DELETE FROM playersnotfound WHERE playerid=? AND leagueid=?",[matchesPlayers[z].playerid,leagueid],function (err, result) {
+                                        if (err) throw err;
+                                        //console.log(result)
+                                    });
                                 }
                             }
-                            completeMatch(validMatch,res[x].match_id,leagueid,result[0].teamname,result[1].teamname,matchCalculated)
+                            completeMatch(validMatch,res[x].match_id,leagueid,result[0].teamname,result[1].teamname,matchCalculated,res[x].radiant_team_id,res[x].dire_team_id)
                             //console.log(playersResult.length)
                             resolve()
                         });
                     });
                 }else{
                     //console.log(result)
+                    completeMatch(0,res[x].match_id,leagueid,"n/a","n/a",matchCalculated,res[x].radiant_team_id,res[x].dire_team_id)
                     console.log("Cant find teams "+res[x].radiant_team_id+" AND "+res[x].dire_team_id)
                     matchesNoTeams++ 
                 }
@@ -1044,15 +1279,15 @@ function updateStats(playerStats,scoring,leagueid){
       }
   });
 }
-function completeMatch(validMatch,matchid,leagueid,team1,team2,matchCalculated){
+function completeMatch(validMatch,matchid,leagueid,team1,team2,matchCalculated, team1id,team2id){
 
   if(matchCalculated==2){
-      con.query("UPDATE leaguematches SET scorescounted=? WHERE leagueid=? AND matchid=?",[validMatch,leagueid,matchid], function (err, result) {
+      con.query("UPDATE leaguematches SET scorescounted=?, team1=?, team2=?,team1id=?,team2id=? WHERE leagueid=? AND matchid=?",[validMatch,team1,team2,team1id,team2id,leagueid,matchid], function (err, result) {
           if (err) throw err;
           //console.log("updated "+matchid)
       });
   }else{
-      con.query("INSERT INTO leaguematches (leagueid,matchid,scorescounted,team1,team2) VALUES (?,?,?,?,?)",[leagueid,matchid,validMatch,team1,team2], function (err, result) {
+      con.query("INSERT INTO leaguematches (leagueid,matchid,scorescounted,team1,team2,team1id,team2id) VALUES (?,?,?,?,?,?,?)",[leagueid,matchid,validMatch,team1,team2,team1id,team2id], function (err, result) {
           if (err) throw err;
           //console.log("created "+matchid)
       });
@@ -1111,26 +1346,32 @@ async function updatePlayer(playername, accountId, foundteamname,leagueid)
     var xpm=0
     var lastHits=0
     var prorecentgames=0
+    var countedGames=0
     for(var i=0;i<recentMatches.length;i++)
     {
-        kills+=recentMatches[i].kills
-        deaths+=recentMatches[i].deaths
-        assists+=recentMatches[i].assists
-        gpm+=recentMatches[i].gold_per_min
-        xpm+=recentMatches[i].xp_per_min
-        lastHits+=recentMatches[i].last_hits
-        //lobby_type 1 = tournament game
-        if(recentMatches[i].lobby_type==1)
+        if(recentMatches[i].lobby_type!=4 && recentMatches[i].lobby_type!=12)
         {
-            prorecentgames++
+            countedGames++
+            kills+=recentMatches[i].kills
+            deaths+=recentMatches[i].deaths
+            assists+=recentMatches[i].assists
+            gpm+=recentMatches[i].gold_per_min
+            xpm+=recentMatches[i].xp_per_min
+            lastHits+=recentMatches[i].last_hits
+            //lobby_type 1 = tournament game
+            if(recentMatches[i].lobby_type==1)
+            {
+                prorecentgames++
+            }
         }
+
     }
-    kills = kills/recentMatches.length
-    deaths = deaths/recentMatches.length
-    assists = assists/recentMatches.length
-    gpm = parseInt(gpm/recentMatches.length, 10)
-    xpm = parseInt(xpm/recentMatches.length, 10)
-    lastHits = parseInt(lastHits/recentMatches.length, 10)
+    kills = kills/countedGames
+    deaths = deaths/countedGames
+    assists = assists/countedGames
+    gpm = parseInt(gpm/countedGames, 10)
+    xpm = parseInt(xpm/countedGames, 10)
+    lastHits = parseInt(lastHits/countedGames, 10)
     console.log(playername+ " kills:" +kills + "deaths:" +deaths +"assists:" +assists+"gpm:" +gpm+"xpm:" +xpm+"lasthits:" +lastHits)
 
     con.query("UPDATE dotaplayer,playerteamleague SET playerid=?,foundteamname=?,kills=?,deaths=?,assists=?,gpm=?,xpm=?,lasthits=?,prorecentgames=? WHERE dotaplayer.playername=? AND dotaplayer.playername=playerteamleague.playername AND leagueid=?",  [accountId, foundteamname,kills, deaths,assists,gpm,xpm, lastHits, prorecentgames, playername,leagueid], (err,rows) => {
@@ -1140,11 +1381,10 @@ async function updatePlayer(playername, accountId, foundteamname,leagueid)
     
   }
 app.post('/updatePlayer', function (req, res) {
-    console.log("POST REQUEST"+req.body.playerid)
     updatePlayer(req.body.playername,req.body.playerid,null,req.body.leagueid)
-    console.log(req.body.currentprice+" AND "+req.body.imageurl)
+
     if( req.body.imageurl!=null){
-      console.log("UPDATE URL")
+
       con.query("UPDATE dotaplayer SET imageurl=? WHERE playername=?",  [req.body.imageurl,req.body.playername], (err,rows) => {
           if (err) console.log(err)//throw reject(err)
           console.log("UPDATED player id")
@@ -1157,7 +1397,7 @@ app.post('/updatePlayer', function (req, res) {
 
 });
 app.post('/updateTeam', function (req, res) {
-  console.log("POST REQUEST")
+
 
   con.query("UPDATE leagueteams SET teamid=?, teamrating=? WHERE teamname=? AND leagueid=?", [req.body.teamid,req.body.teamrating,req.body.teamname,req.body.leagueid],  (err,rows) => {
   if (err) {
