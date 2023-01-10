@@ -32,7 +32,8 @@ app.use(function(req, res, next) {
 
 
   //TODO: previously was * and false (maybe do if and only set if login post?)
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  //res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.setHeader('Access-Control-Allow-Origin', 'https://www.dotafantasy.co.uk');
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -51,7 +52,7 @@ app.use(function(req, res, next) {
 });
 const oneDay = 1000 * 60 * 60 * 24;
 
-//session mid   dleware
+//session mid dleware
 app.use(
     sessions({
     secret: "thisismysecrctekeyfhrgfgrfrty84fwir767",
@@ -115,24 +116,24 @@ app.post('/isAdmin',(req,res)=>{
 app.use('/users', usersRouter);
 app.use('/test', testRouter);
 
-//make sure security group has ipv4 any IP
+// make sure security group has ipv4 any IP
 // let con = mysql.createConnection({
-//   host: "dotafantasydb.ccxbscupv24e.us-east-1.rds.amazonaws.com",
+//   host: "database-1.ccxbscupv24e.us-east-1.rds.amazonaws.com",
 //   user: "root",
 //   password: "Matthew7611!!",
 //   database: 'sys',
 // });
-let con = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "root",
-  database: 'dotafantasy',
-});
-con.connect(function(err) {
-  if (err) throw err;
-  console.log("CONNECTED to db")
-  console.log("running on port 5000")
-});
+// let con = mysql.createConnection({
+//   host: "localhost",
+//   user: "root",
+//   password: "root",
+//   database: 'dotafantasy',
+// });
+// con.connect(function(err) {
+//   if (err) throw err;
+//   console.log("CONNECTED to db")
+//   console.log("running on port 5000")
+// });
 app.get('/max', function(req, res, next) {
 
   con.query("Select * from user ", function (err, result) {
