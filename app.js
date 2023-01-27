@@ -64,7 +64,7 @@ app.use(function (req, res, next) {
 const jsonWebKeys = [
     {"alg":"RS256","e":"AQAB","kid":"hgG3S1nXX4mQQDlesu7z2pgUD4tmxzwMZ866nx7NHJ8=","kty":"RSA","n":"28jb1EMJWypndvSgl3_TJzdRw-xFHcawLQawRNE1rP3r2me21csjQb5zAOORinDgapb6GBstse-vfsMcydZh-JvPJDkDUTYertpHShSgG2MMEF2lGA7uHGfA1kWBcDVIalg6ZJI6aMz1X36aagqXfbU7HBQIkT2Nh3-WeeXWPkl9ZDcmiimIxVmU9lqBmPxRt-H_J_ZKm3YggDwVfgUiCoK3pim-Fi80eANnR3zswVVDESHNND9Ux5i00Hs6g-WNv022QsYHb1iujrZnNPk1zvWr24jtSBI85QD7KfAOUwlwRe710XTkChdgf8GZehFLS9HqJamwPQc_W8KfqnfmCQ","use":"sig"},{"alg":"RS256","e":"AQAB","kid":"KxS4oTyhpR30xkGFHa9+khbxGQ4c618DJpIhY5aGds0=","kty":"RSA","n":"xeufHeC8GOY-laqUwZkpsnt3KDKtiCzeq5Et5TAXYbk4_Thx6HRtouUfoojWEn_SRkwXNrX0QSwkLind6-Gd4zBEcatEvK-VIsQwAJ6RmQZ97hrfVieM_J4kXuLSK8QTpva05AfycE-fEXOdfF_WNfKL9SFHgVzxzkemg917QIDxKfQdyBp-wW_PZl65SX3Fez5jSh0Q6R0YGx06aSyihPGh2lXJZK0kXTcv-OPuqbD5exwKcHweWF_QU2Zkykgz6__4Gjdy0yO4pLXf3Q-qtbEsq207g92rREJIQBLu3ESiVLcmm3h-5Jgq4vo80Wbv_0qP_OO31Ws_Gkfzh75C8w","use":"sig"}
 ]
-var jwk = {"alg":"RS256","e":"AQAB","kid":"KxS4oTyhpR30xkGFHa9+khbxGQ4c618DJpIhY5aGds0=","kty":"RSA","n":"xeufHeC8GOY-laqUwZkpsnt3KDKtiCzeq5Et5TAXYbk4_Thx6HRtouUfoojWEn_SRkwXNrX0QSwkLind6-Gd4zBEcatEvK-VIsQwAJ6RmQZ97hrfVieM_J4kXuLSK8QTpva05AfycE-fEXOdfF_WNfKL9SFHgVzxzkemg917QIDxKfQdyBp-wW_PZl65SX3Fez5jSh0Q6R0YGx06aSyihPGh2lXJZK0kXTcv-OPuqbD5exwKcHweWF_QU2Zkykgz6__4Gjdy0yO4pLXf3Q-qtbEsq207g92rREJIQBLu3ESiVLcmm3h-5Jgq4vo80Wbv_0qP_OO31Ws_Gkfzh75C8w","use":"sig"}
+var jwk = {"alg":"RS256","e":"AQAB","kid":"4VVMertPJTKC4DrDl6tEBNNRQ53AQ1ALZamq1wkmnTs=","kty":"RSA","n":"sXlMgY-YyP9wJJsdAoYuQ262GAydlLSL6EJBAD5PnUnKvz0BihvqRtjHuxQzzJGNADB_CQGs3CxZ3NHfq6B1cs0TvFgzyTMBy_brYDOC2cFBYu8p1dy7R0Lnu2vr1_FL55RSdFSSrixCxh4YQrsh1RBPQI81da6zMMOXsugqx13YfJhW9EoHJJ4zoe9JdH42g-YpVR0TievrRAT2psY1IqcCD_I0UwMqDQqsdDJ05RJU7s-wTy0NYaVwVMIuDuCYdKuq57ELvlahlzRETRE5F7pSp-yW7CdvRpzU_D_flnD_i-RRw6RjQOUDPKo-CNaBzlawUMnED_6tWOh2m2-GJw","use":"sig"}
 var pem = jwkToPem(jwk);
 app.use(function (req, res, next) {
     //console.log(req.url)
@@ -75,7 +75,7 @@ app.use(function (req, res, next) {
         //console.log("WE GOT TOKEN")
         //console.log(decodedToken)
         if(decodedToken!=null){
-            //console.log("valid req")
+            console.log("valid req")
             next();
         }else{
             console.log("INVALID")
@@ -290,7 +290,7 @@ app.get('/getTournamentsGrouped', async function (req, res) {
     con.query(query, function (err, result) {
         if (err) throw err;
         // console.log("Result: " + result);
-        const tournamentArray = [];
+        //const tournamentArray = [];
         var returnJson = {
             upcoming: [],
             live: [],
@@ -298,25 +298,30 @@ app.get('/getTournamentsGrouped', async function (req, res) {
         }
         var date = new Date();
 
-        var leagueName, leagueId
+        var leagueName, leagueId, logoUrl, numTeams, tag1, tag2,dpcpoints
         for (var i = 0; i < result.length; i++) {
 
             console.log(result[i]['leaguenameopendota'] + " " + result[i]['leagueStartDate'])
             leagueName = result[i]['leaguenameopendota']
             leagueId = result[i]['leagueid']
+            logoUrl = result[i]['logourl']
+            numTeams = result[i]['numteams']
+            tag1 = result[i]['tag1']
+            tag2 = result[i]['tag2']
+            dpcpoints = result[i]['dpcpoints']
+            organiserName = result[i]['organisername']
+            organiserLogo = result[i]['organiserlogo']
             if (result[i]['leagueStartDate'] == null || result[i]['leagueEndDate'] == null) {
-                returnJson.live.push({ leagueName, leagueId })
+                returnJson.live.push({ leagueName, leagueId, logoUrl,numTeams,tag1,tag2,dpcpoints,organiserName,organiserLogo})
             } else if (result[i]['leagueStartDate'] > date) {
-                returnJson.upcoming.push({ leagueName, leagueId })
+                returnJson.upcoming.push({ leagueName, leagueId, logoUrl,numTeams,tag1,tag2,dpcpoints,organiserName,organiserLogo})
             } else if (result[i]['leagueEndDate'] < date) {
-                returnJson.ended.push({ leagueName, leagueId })
+                returnJson.ended.push({ leagueName, leagueId, logoUrl,numTeams,tag1,tag2,dpcpoints,organiserName,organiserLogo})
             } else {
-                returnJson.live.push({ leagueName, leagueId })
+                returnJson.live.push({ leagueName, leagueId, logoUrl,numTeams,tag1,tag2,dpcpoints,organiserName,organiserLogo })
             }
-            tournamentArray.push({ leagueName, leagueId })
+            //tournamentArray.push({ leagueName, leagueId })
         }
-
-        console.log(returnJson)
         res.send(returnJson)
         // res.status(200).send("tournamentArray")
     });
@@ -354,7 +359,7 @@ app.get('/getTournaments', async function (req, res) {
 app.get('/getLeagueTeam', function (req, res) {
     // res.send({"dsa":'Hello world from Express.'});
 
-    con.query("Select imageurl, convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername ORDER BY currentprice DESC", [req.query.leagueId, req.query.teamname], function (err, result) {
+    con.query("Select imageurl, convert(playerimage using utf8), dotaplayer.playername, currentprice, teamname,playerid from playerteamleague,dotaplayer WHERE leagueid = ? AND teamname=? AND dotaplayer.playername=playerteamleague.playername ORDER BY position ASC", [req.query.leagueId, req.query.teamname], function (err, result) {
         if (err) throw err;
 
         res.send(result)
@@ -390,11 +395,13 @@ app.get('/getLeagueShowLocks', async function (req, res) {
         // res.status(200).send("tournamentArray")
     });
 });
-app.post('/updateLeagueLocks', function (req, res) {
+app.post('/updateLeagueLocks', async function (req, res) {
     // res.send({"dsa":'Hello world from Express.'});
-    if (req.session.userid != "matt") {
+    var username = await getUserName(req.headers.authorization)
+    if (username != "matt") {
+        res.sendStatus(401)
         return
-    }
+    } 
     console.log(req.body.leagueid + " UPDATE LEAGUE LOCKS T" + req.body.showLeague + "  WITH " + req.body.lockRosters)
     con.query("UPDATE dotaleague SET showleague=?, lockrosters=? WHERE leagueid=?", [req.body.showLeague, req.body.lockRosters, req.body.leagueid], function (err, result) {
         if (err) console.log(err);
@@ -405,14 +412,11 @@ app.post('/updateLeagueLocks', function (req, res) {
 });
 app.get('/getLeagueTeams', function (req, res) {
     // res.send({"dsa":'Hello world from Express.'});
-
-    console.log("GET REQUEST")
     console.log(req.query.leagueId)
-    //console.log(req.query)
     //https://www.geeksforgeeks.org/how-to-convert-from-blob-to-text-in-mysql/
     con.query("Select teamrating,teamid,teamname, convert(logo using utf8),logourl from leagueteams WHERE leagueid = ? ORDER BY teamrating DESC", [req.query.leagueId], function (err, result) {
         if (err) throw err;
-        //console.log("Result: " + result);
+        console.log("Result: " + result);
         const returnArray = [];
 
         con.query("Select playerid,convert(playerimage using utf8),dotaplayer.playername, currentprice, teamname,imageurl,kills,deaths,gpm,xpm,assists from playerteamleague,dotaplayer WHERE leagueid = ? AND dotaplayer.playername = playerteamleague.playername ORDER BY currentprice DESC", [req.query.leagueId], function (err, playerResult) {
@@ -450,7 +454,7 @@ app.get('/getLeagueTeams', function (req, res) {
                             "xpm": playerResult[j]['xpm'],
                             "assists": Math.round(playerResult[j]['assists'] * 100) / 100
                             /*"playerImage":playerResult[j]['convert(playerimage using utf8)']*/
-})
+                        })
 
                     }
                 }
@@ -466,8 +470,13 @@ app.get('/getLeagueTeams', function (req, res) {
     });
 });
 app.post('/addTournament', async function (req, res) {
-    //res.__setitem__("Access-Control-Allow-Origin", "*")
-
+    console.log("GOT REQUEST POST")
+    var username = await getUserName(req.headers.authorization)
+    console.log("NAME "+username)
+    if (username != "matt") {
+        res.sendStatus(401)
+        return
+    } 
 
     const response = await fetch(`https://api.opendota.com/api/leagues/?api_key=8e2920d4-65f2-406a-9454-f59538c18c7e`, {
         method: 'GET',
@@ -490,7 +499,7 @@ app.post('/addTournament', async function (req, res) {
 
         } else {
             console.log("adding league teams")
-            var response = await GGSCOREaddLeagueTeams(req.body.ggscoreurl, req.body.leagueId)
+            var response = await GGSCOREaddLeagueTeams(req.body.ggscoreurl, req.body.leagueId, req.body.isDiv2)
 
         }
 
@@ -499,23 +508,43 @@ app.post('/addTournament', async function (req, res) {
     //res.status(200)
     res.send({ msg: "Success adding tournament" })
 });
-async function GGSCOREaddLeagueTeams(ggscoreurl, leagueid) {
+
+async function GGSCOREaddLeagueTeams(ggscoreurl, leagueid,isDiv2) {
+    console.log("DIV 2 "+isDiv2);
+
     var leagueHtml = await getHtml(ggscoreurl)
     //console.log(leagueHtml)
     var parser = new DomParser();
     var doc = parser.parseFromString(leagueHtml, 'text/html');
-    var collection = doc.getElementsByClassName("teams-block")
+    var collection = doc.getElementsByClassName("tLogo")
+    console.log(collection[0].innerHTML);
+    var urlStart = collection[0].innerHTML.indexOf('img src="') + 9
+    var urlEnd = collection[0].innerHTML.indexOf('"', urlStart)
+    var logoUrl = "https://ggscore.com" + collection[0].innerHTML.substring(urlStart, urlEnd)
 
+
+    collection = doc.getElementsByClassName("teams-block")
     //0 upper div 1 lower div
-    doc = parser.parseFromString(collection[0].innerHTML, 'text/html')
-    collection = doc.getElementsByClassName("tb")
+    if(isDiv2==true){
+        console.log("Div 2")
+        doc = parser.parseFromString(collection[1].innerHTML, 'text/html')
+    }else{
+        console.log("Div 1")
+        doc = parser.parseFromString(collection[0].innerHTML, 'text/html')
+    }
 
+    collection = doc.getElementsByClassName("tb")
+    con.query("UPDATE dotaleague SET logourl=?,numteams=? WHERE leagueid=?", [logoUrl, collection.length, leagueid], (err, rows) => {
+        if (err) {
+            console.log("error" + err.sqlMessage)
+        }
+    });
     var teamNames = []
     var players = []
     for (var x = 0; x < collection.length; x++) {
         //console.log(collection[x].innerHTML)
-        var urlStart = collection[x].innerHTML.indexOf('<a href="') + 9
-        var urlEnd = collection[x].innerHTML.indexOf('"', urlStart)
+        urlStart = collection[x].innerHTML.indexOf('<a href="') + 9
+        urlEnd = collection[x].innerHTML.indexOf('"', urlStart)
         //console.log(urlStart+" and "+ urlEnd)
         var teamUrl = "https://ggscore.com/" + collection[x].innerHTML.substring(urlStart, urlEnd)
         var teamJson = await GGSCOREaddTeam(teamUrl, leagueid)
@@ -564,8 +593,8 @@ async function GGSCOREaddLeagueTeams(ggscoreurl, leagueid) {
         if (obj == null) {
             console.log("couldnt find " + players[x])
         } else {
-            //console.log("FOUND "+players[x]+" "+obj.account_id )
-            updatePlayer(players[x], obj.account_id, obj.team_name, leagueid)
+            console.log("FOUND "+players[x]+" "+obj.account_id )
+            await updatePlayer(players[x], obj.account_id, obj.team_name, leagueid)
         }
         addPlayerPrice(players[x], leagueid)
     }
@@ -633,10 +662,10 @@ function addTeamPrices(teamname, leagueid) {
     });
 }
 function addPlayerPrice(playername, leagueid) {
-    //console.log("price "+playername+"  "+leagueid)
+    console.log("calc price for  "+playername)
     con.query("SELECT position,teamrating,gpm from leagueteams,playerteamleague,dotaplayer WHERE playerteamleague.playername=? AND playerteamleague.leagueid=? AND playerteamleague.teamname=leagueteams.teamname AND dotaplayer.playername=playerteamleague.playername ", [playername, leagueid], function (err, result) {
         if (err) throw err;
-        //console.log(result[0]['position'] +" AND "+ result[0]['teamrating'])
+        console.log(result[0]['position'] +" AND "+ result[0]['teamrating'])
         if (result[0]['teamrating'] != null) {
             var price = (6 - result[0]['position']) * (result[0]['teamrating'] / 2);
             console.log(playername + " has gpm " + result[0]['gpm'] + " AND POSTITION " + result[0]['position'])
@@ -924,33 +953,29 @@ async function addPlayer(playername, leagueid, teamname, position, playerUrl) {
 //     return (6-position) * (teamRating / 3);
 
 // }
-app.post('/addTeamSelection', function (req, res) {
-
-    if (req.session.userid == null) {
-        res.send('Error, logout and try again')
-        return
+app.post('/addTeamSelection', async function (req, res) {
+    var username = await getUserName(req.headers.authorization)
+    if(req.body.teamname!=null){
+        con.query("INSERT INTO userleagueteam (user, teamname, leagueid ,player1,player2,player3,player4,player5) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [username,req.body.teamname, req.body.leagueid, req.body.players[0], req.body.players[1], req.body.players[2], req.body.players[3], req.body.players[4]], (err, rows) => {
+            if (err) {
+                console.log("error" + err.sqlMessage)
+                res.status(400)
+            }else {
+                res.send('Team Succesfully Added')
+            }
+        });
+    }else{
+        con.query("UPDATE userleagueteam SET player1 =?,player2=?,player3=?,player4=?,player5=? WHERE user =? AND leagueid =?", [req.body.players[0], req.body.players[1], req.body.players[2], req.body.players[3], req.body.players[4],username, req.body.leagueid], (err, rows) => {
+            if (err) {
+                res.status(400)
+            }
+            else {
+                //res.sendStatus(200)
+                res.send('Team Succesfully Updated')
+            }
+        });
     }
-
-    con.query("INSERT INTO userleagueteam (user, leagueid ,player1,player2,player3,player4,player5) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.session.userid, req.body.leagueid, req.body.players[0], req.body.players[1], req.body.players[2], req.body.players[3], req.body.players[4]], (err, rows) => {
-        if (err) {
-            console.log("error" + err.sqlMessage)
-
-            con.query("UPDATE userleagueteam SET player1 =?,player2=?,player3=?,player4=?,player5=? WHERE user =? AND leagueid =?", [req.body.players[0], req.body.players[1], req.body.players[2], req.body.players[3], req.body.players[4], req.session.userid, req.body.leagueid], (err, rows) => {
-                if (err) {
-                    res.status(400)
-                }
-                else {
-                    //res.sendStatus(200)
-                    res.send('Team Succesfully Updated')
-                }
-            });
-        }
-        else {
-            //res.sendStatus(200)
-            res.send('Team Succesfully Added')
-        }
-
-    });
+    
 });
 app.get('/getUserLeagueTeam', async function (req, res) {
     // res.send({"dsa":'Hello world from Express.'});
@@ -987,7 +1012,8 @@ app.get('/getUserLeagueTeam', async function (req, res) {
                 // console.log(totalPrice)
                 res.send({
                     "selectedplayers": selectedPlayers,
-                    "price": totalPrice
+                    "price": totalPrice,
+                    "teamName":result[0].teamname
                 })
             });
 
